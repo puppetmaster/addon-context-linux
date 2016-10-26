@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # -------------------------------------------------------------------------- #
-# Copyright 2010-2014, C12G Labs S.L.                                        #
+# Copyright 2010-2016, OpenNebula Systems                                    #
 #                                                                            #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may    #
 # not use this file except in compliance with the License. You may obtain    #
@@ -72,13 +72,6 @@ get_gateway() {
     if is_gateway; then
         gateway=$(get_iface_var "GATEWAY")
 
-        if [ -z "$gateway" ]; then
-            if [ "$DEV" = "eth0" ]; then
-                net_prefix=$(echo $NETWORK | cut -d'.' -f1,2,3)
-                gateway="${net_prefix}.1"
-            fi
-        fi
-
         echo $gateway
     fi
 }
@@ -92,10 +85,6 @@ get_gateway6() {
 
 get_ip() {
     ip=$(get_iface_var "IP")
-
-    if [ -z "$ip" ]; then
-        ip=$(mac2ip $MAC)
-    fi
 
     echo $ip
 }
@@ -181,6 +170,9 @@ gen_network_configuration()
         GATEWAY6=$(get_gateway6)
         CONTEXT_FORCE_IPV4=$(get_iface_var "CONTEXT_FORCE_IPV4")
 
+        [ -z "${IP}${IPV6}" ] && continue
+        [ -z "${DEV}" ] && continue
+
         (
             cat <<EOT
 DEVICE=$DEV
@@ -207,6 +199,8 @@ configure_network()
 
     sleep 2
 }
+
+[ -z "$(env | cut -d= -f1 | grep -E '^ETH[0-9]+_IPV*6*')" ] && exit 0
 
 configure_network
 

@@ -13,7 +13,7 @@ require 'pp'
 module CloudClient
 
     # OpenNebula version
-    VERSION = '4.14.0'
+    VERSION = '5.0.0'
 
     # #########################################################################
     # Default location for the authentication file
@@ -131,27 +131,85 @@ end
 module OneGate
     module VirtualMachine
         VM_STATE=%w{INIT PENDING HOLD ACTIVE STOPPED SUSPENDED DONE FAILED
-            POWEROFF UNDEPLOYED}
+            POWEROFF UNDEPLOYED CLONING CLONING_FAILURE}
 
-        LCM_STATE=%w{LCM_INIT PROLOG BOOT RUNNING MIGRATE SAVE_STOP SAVE_SUSPEND
-            SAVE_MIGRATE PROLOG_MIGRATE PROLOG_RESUME EPILOG_STOP EPILOG
-            SHUTDOWN CANCEL FAILURE CLEANUP_RESUBMIT UNKNOWN HOTPLUG SHUTDOWN_POWEROFF
-            BOOT_UNKNOWN BOOT_POWEROFF BOOT_SUSPENDED BOOT_STOPPED CLEANUP_DELETE
-            HOTPLUG_SNAPSHOT HOTPLUG_NIC HOTPLUG_SAVEAS HOTPLUG_SAVEAS_POWEROFF
-            HOTPLUG_SAVEAS_SUSPENDED SHUTDOWN_UNDEPLOY EPILOG_UNDEPLOY
-            PROLOG_UNDEPLOY BOOT_UNDEPLOY}
+        LCM_STATE=%w{
+            LCM_INIT
+            PROLOG
+            BOOT
+            RUNNING
+            MIGRATE
+            SAVE_STOP
+            SAVE_SUSPEND
+            SAVE_MIGRATE
+            PROLOG_MIGRATE
+            PROLOG_RESUME
+            EPILOG_STOP
+            EPILOG
+            SHUTDOWN
+            CANCEL
+            FAILURE
+            CLEANUP_RESUBMIT
+            UNKNOWN
+            HOTPLUG
+            SHUTDOWN_POWEROFF
+            BOOT_UNKNOWN
+            BOOT_POWEROFF
+            BOOT_SUSPENDED
+            BOOT_STOPPED
+            CLEANUP_DELETE
+            HOTPLUG_SNAPSHOT
+            HOTPLUG_NIC
+            HOTPLUG_SAVEAS
+            HOTPLUG_SAVEAS_POWEROFF
+            HOTPLUG_SAVEAS_SUSPENDED
+            SHUTDOWN_UNDEPLOY
+            EPILOG_UNDEPLOY
+            PROLOG_UNDEPLOY
+            BOOT_UNDEPLOY
+            HOTPLUG_PROLOG_POWEROFF
+            HOTPLUG_EPILOG_POWEROFF
+            BOOT_MIGRATE
+            BOOT_FAILURE
+            BOOT_MIGRATE_FAILURE
+            PROLOG_MIGRATE_FAILURE
+            PROLOG_FAILURE
+            EPILOG_FAILURE
+            EPILOG_STOP_FAILURE
+            EPILOG_UNDEPLOY_FAILURE
+            PROLOG_MIGRATE_POWEROFF
+            PROLOG_MIGRATE_POWEROFF_FAILURE
+            PROLOG_MIGRATE_SUSPEND
+            PROLOG_MIGRATE_SUSPEND_FAILURE
+            BOOT_UNDEPLOY_FAILURE
+            BOOT_STOPPED_FAILURE
+            PROLOG_RESUME_FAILURE
+            PROLOG_UNDEPLOY_FAILURE
+            DISK_SNAPSHOT_POWEROFF
+            DISK_SNAPSHOT_REVERT_POWEROFF
+            DISK_SNAPSHOT_DELETE_POWEROFF
+            DISK_SNAPSHOT_SUSPENDED
+            DISK_SNAPSHOT_REVERT_SUSPENDED
+            DISK_SNAPSHOT_DELETE_SUSPENDED
+            DISK_SNAPSHOT
+            DISK_SNAPSHOT_DELETE
+            PROLOG_MIGRATE_UNKNOWN
+            PROLOG_MIGRATE_UNKNOWN_FAILURE
+        }
 
         SHORT_VM_STATES={
-            "INIT"      => "init",
-            "PENDING"   => "pend",
-            "HOLD"      => "hold",
-            "ACTIVE"    => "actv",
-            "STOPPED"   => "stop",
-            "SUSPENDED" => "susp",
-            "DONE"      => "done",
-            "FAILED"    => "fail",
-            "POWEROFF"  => "poff",
-            "UNDEPLOYED"=> "unde"
+            "INIT"              => "init",
+            "PENDING"           => "pend",
+            "HOLD"              => "hold",
+            "ACTIVE"            => "actv",
+            "STOPPED"           => "stop",
+            "SUSPENDED"         => "susp",
+            "DONE"              => "done",
+            "FAILED"            => "fail",
+            "POWEROFF"          => "poff",
+            "UNDEPLOYED"        => "unde",
+            "CLONING"           => "clon",
+            "CLONING_FAILURE"   => "fail"
         }
 
         SHORT_LCM_STATES={
@@ -186,7 +244,35 @@ module OneGate
             "SHUTDOWN_UNDEPLOY" => "shut",
             "EPILOG_UNDEPLOY"   => "epil",
             "PROLOG_UNDEPLOY"   => "prol",
-            "BOOT_UNDEPLOY"     => "boot"
+            "BOOT_UNDEPLOY"     => "boot",
+            "HOTPLUG_PROLOG_POWEROFF"   => "hotp",
+            "HOTPLUG_EPILOG_POWEROFF"   => "hotp",
+            "BOOT_MIGRATE"              => "boot",
+            "BOOT_FAILURE"              => "fail",
+            "BOOT_MIGRATE_FAILURE"      => "fail",
+            "PROLOG_MIGRATE_FAILURE"    => "fail",
+            "PROLOG_FAILURE"            => "fail",
+            "EPILOG_FAILURE"            => "fail",
+            "EPILOG_STOP_FAILURE"       => "fail",
+            "EPILOG_UNDEPLOY_FAILURE"   => "fail",
+            "PROLOG_MIGRATE_POWEROFF"   => "migr",
+            "PROLOG_MIGRATE_POWEROFF_FAILURE"   => "fail",
+            "PROLOG_MIGRATE_SUSPEND"            => "migr",
+            "PROLOG_MIGRATE_SUSPEND_FAILURE"    => "fail",
+            "BOOT_UNDEPLOY_FAILURE"     => "fail",
+            "BOOT_STOPPED_FAILURE"      => "fail",
+            "PROLOG_RESUME_FAILURE"     => "fail",
+            "PROLOG_UNDEPLOY_FAILURE"   => "fail",
+            "DISK_SNAPSHOT_POWEROFF"        => "snap",
+            "DISK_SNAPSHOT_REVERT_POWEROFF" => "snap",
+            "DISK_SNAPSHOT_DELETE_POWEROFF" => "snap",
+            "DISK_SNAPSHOT_SUSPENDED"       => "snap",
+            "DISK_SNAPSHOT_REVERT_SUSPENDED"=> "snap",
+            "DISK_SNAPSHOT_DELETE_SUSPENDED"=> "snap",
+            "DISK_SNAPSHOT"        => "snap",
+            "DISK_SNAPSHOT_DELETE" => "snap",
+            "PROLOG_MIGRATE_UNKNOWN" => "migr",
+            "PROLOG_MIGRATE_UNKNOWN_FAILURE" => "fail"
         }
 
         def self.state_to_str(id, lcm_id)
@@ -401,18 +487,18 @@ Available commands
     $ onegate vm update [VMID] --data KEY=VALUE[\\nKEY2=VALUE2]
 
     $ onegate vm ACTION VMID
-        $ onegate resume [VMID]
-        $ onegate stop [VMID]
-        $ onegate suspend [VMID]
-        $ onegate delete [VMID] [--hard]
-        $ onegate shutdown [VMID] [--hard]
-        $ onegate reboot [VMID] [--hard]
-        $ onegate poweroff [VMID] [--hard]
-        $ onegate resubmit [VMID]
-        $ onegate resched [VMID]
-        $ onegate unresched [VMID]
-        $ onegate hold [VMID]
-        $ onegate release [VMID]
+        $ onegate vm resume VMID
+        $ onegate vm stop VMID
+        $ onegate vm suspend VMID
+        $ onegate vm delete VMID [--hard]
+        $ onegate vm terminate VMID [--hard]
+        $ onegate vm reboot VMID [--hard]
+        $ onegate vm poweroff VMID [--hard]
+        $ onegate vm resubmit VMID
+        $ onegate vm resched VMID
+        $ onegate vm unresched VMID
+        $ onegate vm hold VMID
+        $ onegate vm release VMID
 
     $ onegate service show [--json]
 
@@ -491,7 +577,7 @@ when "vm"
          "stop",
          "suspend",
          "delete",
-         "shutdown",
+         "terminate",
          "reboot",
          "poweroff",
          "resubmit",

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # -------------------------------------------------------------------------- #
-# Copyright 2010-2014, C12G Labs S.L.                                        #
+# Copyright 2010-2016, OpenNebula Systems                                    #
 #                                                                            #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may    #
 # not use this file except in compliance with the License. You may obtain    #
@@ -16,11 +16,20 @@
 # limitations under the License.                                             #
 #--------------------------------------------------------------------------- #
 
-VERSION=${VERSION:-4.14.1}
+ENVIRONMENT=${ENVIRONMENT:-one}
+
+if [ $ENVIRONMENT != "one" ]; then
+    DEFAULT_NAME="one-context-$ENVIRONMENT"
+else
+    DEFAULT_NAME="one-context"
+fi
+
+VERSION=${VERSION:-5.0.2}
 MAINTAINER=${MAINTAINER:-OpenNebula Systems <support@opennebula.systems>}
 LICENSE=${LICENSE:-Apache 2.0}
-PACKAGE_NAME=${PACKAGE_NAME:-one-context}
+PACKAGE_NAME=${PACKAGE_NAME:-$DEFAULT_NAME}
 VENDOR=${VENDOR:-OpenNebula Systems}
+SUMMARY="OpenNebula Contextualization Package"
 DESC="
 This package prepares a VM image for OpenNebula:
   * Disables udev net and cd persistent rules
@@ -45,24 +54,38 @@ URL=${URL:-http://opennebula.org}
 
 SCRIPTS_DIR=$PWD
 NAME="${PACKAGE_NAME}_${VERSION}.${PACKAGE_TYPE}"
-rm $NAME
+
+rm -f $NAME
 
 rm -rf tmp
 mkdir tmp
+
 cp -r base/* tmp
+test -d base.$ENVIRONMENT && cp -r base.$ENVIRONMENT/* tmp
+
 cp -r base_$PACKAGE_TYPE/* tmp
+test -d base_$PACKAGE_TYPE.$ENVIRONMENT && \
+    cp -r base_$PACKAGE_TYPE.$ENVIRONMENT/* tmp
 
 for i in $*; do
   cp -r "$i" tmp
 done
 
+if [ -f "postinstall.$ENVIRONMENT" ]; then
+    POSTINSTALL="postinstall.$ENVIRONMENT"
+else
+    POSTINSTALL="postinstall.one"
+fi
+
 cd tmp
+
+mkdir -p "$SCRIPTS_DIR/out"
+rm -f "$SCRIPTS_DIR/out/$NAME"
 
 fpm -n "$PACKAGE_NAME" -t "$PACKAGE_TYPE" $PKGARGS -s dir --vendor "$VENDOR" \
     --license "$LICENSE" --description "$DESCRIPTION" --url "$URL" \
-    -m "$MAINTAINER" -v "$VERSION" --after-install $SCRIPTS_DIR/postinstall \
-    -a all -p $SCRIPTS_DIR/$NAME *
+    -m "$MAINTAINER" -v "$VERSION" --after-install $SCRIPTS_DIR/$POSTINSTALL \
+    -a all -p $SCRIPTS_DIR/out/$NAME --rpm-summary "$SUMMARY" *
 
 echo $NAME
-
 

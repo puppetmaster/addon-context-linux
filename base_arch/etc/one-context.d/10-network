@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # -------------------------------------------------------------------------- #
-# Copyright 2010-2014, C12G Labs S.L.                                        #
+# Copyright 2010-2016, OpenNebula Systems                                    #
 #                                                                            #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may    #
 # not use this file except in compliance with the License. You may obtain    #
@@ -28,6 +28,27 @@ mac2ip() {
     ip="$ip_a.$ip_b.$ip_c.$ip_d"
 
     echo $ip
+}
+
+mask2cidr() {
+    mask=$1
+    nbits=0
+    IFS=.
+    for dec in $mask ; do
+        case $dec in
+            255) let nbits+=8;;
+            254) let nbits+=7 ; break ;;
+            252) let nbits+=6 ; break ;;
+            248) let nbits+=5 ; break ;;
+            240) let nbits+=4 ; break ;;
+            224) let nbits+=3 ; break ;;
+            192) let nbits+=2 ; break ;;
+            128) let nbits+=1 ; break ;;
+            0);;
+            *) echo "Error: $dec is not recognised"; exit 1
+        esac
+    done
+    echo "$nbits"
 }
 
 # Gets the network part of an IP
@@ -93,10 +114,6 @@ get_gateway6() {
 get_ip() {
     ip=$(get_iface_var "IP")
 
-    if [ -z "$ip" ]; then
-        ip=$(mac2ip $MAC)
-    fi
-
     echo $ip
 }
 
@@ -109,18 +126,20 @@ get_iface_var() {
 
 gen_iface_conf() {
     cat <<EOT
-iface $DEV inet static
-  address $IP
-  network $NETWORK
-  netmask $MASK
+[Network]
+Address=$IP/$CIDR
 EOT
 
-    if [ -n "$MTU" ]; then
-        echo "  mtu $MTU"
+    if [ -n "$GATEWAY" ]; then
+        echo "Gateway=$GATEWAY"
     fi
 
-    if [ -n "$GATEWAY" ]; then
-        echo "  gateway $GATEWAY"
+    if [ -n "$MTU" ]; then
+        cat <<EOT
+
+[Link]
+MTUBytes=$MTU"
+EOT
     fi
 
     echo ""
@@ -128,17 +147,20 @@ EOT
 
 gen_iface6_conf() {
     cat <<EOT
-iface $DEV inet6 static
-  address $IPV6
-  netmask 64
+[Network]
+Address=$IPV6/64
 EOT
 
-    if [ -n "$MTU" ]; then
-        echo "  mtu $MTU"
+    if [ -n "$GATEWAY6" ]; then
+        echo "Gateway=$GATEWAY6"
     fi
 
-    if [ -n "$GATEWAY6" ]; then
-        echo "  gateway $GATEWAY6"
+    if [ -n "$MTU" ]; then
+        cat <<EOT
+
+[Link]
+MTUBytes=$MTU
+EOT
     fi
 
     echo ""
@@ -146,7 +168,7 @@ EOT
 
 get_interface_mac()
 {
-    ip link show | awk '/^[0-9]+: [A-Za-z0-9]+:/ { device=$2; gsub(/:/, "",device)} /link\/ether/ { print device " " $2 }'
+    ip link show | awk '/^[0-9]+: [[:alnum:]]+:/ { device=$2; gsub(/:/, "",device)} /link\/ether/ { print device " " $2 }'
 }
 
 get_context_interfaces()
@@ -164,12 +186,6 @@ get_dev()
 
 gen_network_configuration()
 {
-    cat <<EOT
-auto lo
-iface lo inet loopback
-
-EOT
-
     INTERFACE_MAC=$(get_interface_mac)
     CONTEXT_INTERFACES=$(get_context_interfaces)
     GATEWAY_IFACE_NUM=$(echo "$GATEWAY_IFACE" | sed 's/^ETH//')
@@ -183,6 +199,7 @@ EOT
         IP=$(get_ip)
         NETWORK=$(get_network)
         MASK=$(get_mask)
+        CIDR=$(mask2cidr "$MASK")
         MTU=$(get_mtu)
         GATEWAY=$(get_gateway)
 
@@ -191,55 +208,24 @@ EOT
         GATEWAY6=$(get_gateway6)
         CONTEXT_FORCE_IPV4=$(get_iface_var "CONTEXT_FORCE_IPV4")
 
-        echo "auto $DEV"
+        [ -z "${IP}${IPV6}" ] && continue
+        [ -z "${DEV}" ] && continue
 
-        [[ -z $IPV6 || -n $CONTEXT_FORCE_IPV4 ]] && gen_iface_conf
-        [[ -n $IPV6 ]] && gen_iface6_conf
+        (
+            cat <<EOT
+[Match]
+Name=$DEV
+
+EOT
+            [[ -z $IPV6 || -n $CONTEXT_FORCE_IPV4 ]] && gen_iface_conf
+            [[ -n $IPV6 ]] && gen_iface6_conf
+
+        ) > /etc/systemd/network/${DEV}.network
 
     done
 }
 
-configure_network()
-{
-    gen_network_configuration > /etc/network/interfaces
-    echo "source /etc/network/interfaces.d/*.cfg" >> /etc/network/interfaces
-}
+[ -z "$(env | cut -d= -f1 | grep -E '^ETH[0-9]+_IPV*6*')" ] && exit 0
 
-deactivate_network()
-{
-    . /etc/os-release
-    if [ $ID = "ubuntu" ]; then
-        IFACES=`/sbin/ifquery --list -a`
+gen_network_configuration
 
-        for i in $IFACES; do
-            if [ $i != 'lo' ]; then
-                /sbin/ifdown $i
-                /sbin/ip addr flush dev $i
-            fi
-        done
-    else
-        service networking stop
-    fi
-}
-
-activate_network()
-{
-    . /etc/os-release
-    if [ $ID = "ubuntu" ]; then
-        IFACES=`/sbin/ifquery --list -a`
-
-        for i in $IFACES; do
-            /sbin/ifup $i
-        done
-    else
-        service networking stop
-        sleep 1
-        service networking start
-    fi
-
-    sleep 2
-}
-
-deactivate_network
-configure_network
-activate_network

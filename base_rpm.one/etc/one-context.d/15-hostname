@@ -1,14 +1,16 @@
 #!/bin/bash
 
-CONFIG_FILE="/etc/hostname"
+CONFIG_FILE="/etc/sysconfig/network"
 
 function set_hostname() {
     NAME=$1
 
     [ -n "$NAME" ] || exit 0
 
-    echo $NAME > $CONFIG_FILE
-
+    sed -i '/^HOSTNAME=.*$/d' $CONFIG_FILE
+    echo "HOSTNAME=$NAME" >> $CONFIG_FILE
+    [[ $(awk -F= '/^VERSION_ID/ {gsub("\"","");print $2}' /etc/os-release) -ge 7 ]] && echo $NAME > /etc/hostname
+        
     hostname $NAME
 }
 
@@ -22,7 +24,7 @@ function get_dns_name() {
 }
 
 if [ -n "$SET_HOSTNAME" ]; then
-    set_hostname $SET_HOSTNAME
+    set_hostname $(echo "$SET_HOSTNAME" | sed -e 's/[^-a-zA-Z0-9]/-/g' -e 's/^-*//g' -e 's/-*$//g')
 elif [ -n "$DNS_HOSTNAME" ]; then
     set_hostname $(get_dns_name)
 fi
